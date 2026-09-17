@@ -25,7 +25,7 @@ import type {
 } from "@shared/schema";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import Database from "better-sqlite3";
-import { SCHEMA_SQL } from "./ddl.sql";
+import { SCHEMA_SQL } from "./ddl";
 import { eq, desc } from "drizzle-orm";
 
 import { mkdirSync } from "fs";
