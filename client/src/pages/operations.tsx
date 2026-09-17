@@ -105,6 +105,7 @@ export default function Operations() {
   const { toast } = useToast();
   const admin = isAdmin(user);
   const [form, setForm] = useState({ name: "", pin: "", cert: "", phone: "" });
+  const [me, setMe] = useState({ name: "", pin: "" });
 
   const { data, isLoading } = useQuery<Overview>({ queryKey: ["/api/overview"] });
   const { data: sheets, isLoading: sheetsLoading } = useQuery<SheetOption[]>({
@@ -145,6 +146,22 @@ export default function Operations() {
     },
     onError: fail("Could not add inspector"),
   });
+  const saveMe = useMutation({
+    mutationFn: async () => {
+      const body: Record<string, string> = {};
+      if (me.name.trim()) body.name = me.name.trim();
+      if (me.pin.trim()) body.pin = me.pin.trim();
+      return apiRequest("PATCH", `/api/team/${user?.id}`, body);
+    },
+    onSuccess: () => {
+      setMe({ name: "", pin: "" });
+      queryClient.invalidateQueries({ queryKey: ["/api/overview"] });
+      toast({ title: "Account updated", description: "Use your new details next time you sign in." });
+    },
+    onError: (e: any) =>
+      toast({ title: "Could not update", description: String(e?.message ?? e), variant: "destructive" }),
+  });
+
 
   const setSheet = useMutation({
     mutationFn: async (v: { id: number; sheetId: string; sheetName: string }) => {
@@ -342,6 +359,49 @@ export default function Operations() {
               </div>
             </div>
           ))}
+        </div>
+
+        <Separator className="my-5" />
+        <SectionTitle
+          title="Your account"
+          description="Change your own display name or PIN. Leave a field blank to keep it as-is."
+        />
+        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div>
+            <Label className="text-xs">Name</Label>
+            <Input
+              className="mt-1"
+              placeholder={user?.name ?? ""}
+              value={me.name}
+              onChange={(e) => setMe({ ...me, name: e.target.value })}
+              data-testid="input-me-name"
+            />
+          </div>
+          <div>
+            <Label className="text-xs">New PIN</Label>
+            <Input
+              className="mt-1"
+              inputMode="numeric"
+              placeholder="4+ digits"
+              value={me.pin}
+              onChange={(e) => setMe({ ...me, pin: e.target.value })}
+              data-testid="input-me-pin"
+            />
+          </div>
+          <div className="flex items-end">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={
+                saveMe.isPending ||
+                (!me.name.trim() && me.pin.trim().length < 4)
+              }
+              onClick={() => saveMe.mutate()}
+              data-testid="button-save-me"
+            >
+              {saveMe.isPending ? "Saving…" : "Save account"}
+            </Button>
+          </div>
         </div>
 
         {admin && (
