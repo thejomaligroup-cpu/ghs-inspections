@@ -113,11 +113,17 @@ export default function Operations() {
     enabled: admin,
     staleTime: 5 * 60 * 1000,
   });
+  const { data: sheetStatus } = useQuery<{
+    mode: string;
+    serviceAccountEmail: string;
+  }>({ queryKey: ["/api/sheets/status"], enabled: admin, staleTime: 60 * 60 * 1000 });
 
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: ["/api/overview"] });
     queryClient.invalidateQueries({ queryKey: ["/api/team"] });
     queryClient.invalidateQueries({ queryKey: ["/api/inspections"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/sheets"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/sheets/status"] });
   };
 
   const fail = (title: string) => (err: any) =>
@@ -272,6 +278,23 @@ export default function Operations() {
               : "Your operations manager links each inspector to a sales sheet."
           }
         />
+        {admin && !sheetsLoading && (sheets?.length ?? 0) === 0 && (
+          <div
+            className="mt-3 rounded-md border border-dashed border-border bg-muted/40 p-3 text-xs text-muted-foreground"
+            data-testid="text-sheets-empty"
+          >
+            {sheetStatus?.serviceAccountEmail ? (
+              <>
+                No spreadsheets are shared with this app yet. In Google Sheets, open each
+                inspector's sales sheet, press <span className="font-medium">Share</span>, and
+                give <span className="font-mono text-foreground">{sheetStatus.serviceAccountEmail}</span>{" "}
+                <span className="font-medium">Editor</span> access. Then press Refresh above.
+              </>
+            ) : (
+              <>Google access is not configured on this server yet, so no sheets can be listed.</>
+            )}
+          </div>
+        )}
 
         <div className="mt-4 space-y-3">
           {data.inspectors.map((t) => (

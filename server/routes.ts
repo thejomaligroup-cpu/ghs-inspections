@@ -2,6 +2,7 @@ import type { Express } from "express";
 import type { Server } from "node:http";
 import { storage } from "./storage";
 import { parseLabReport } from "./labParse";
+import { googleMode, serviceAccountEmail } from "./google";
 import { exportToSalesSheet, listCandidateSheets } from "./salesSheet";
 
 type Actor = { id: number; name: string; role: string } | undefined;
@@ -123,6 +124,13 @@ export async function registerRoutes(
   });
 
   /* ---------------- Admin: sales sheets ---------------- */
+  app.get("/api/sheets/status", (req, res) => {
+    const actor = actorOf(req);
+    if (actor?.role !== "admin")
+      return res.status(403).json({ message: "Admins only." });
+    res.json({ mode: googleMode(), serviceAccountEmail: serviceAccountEmail() });
+  });
+
   app.get("/api/sheets", async (req, res) => {
     const actor = actorOf(req);
     if (actor?.role !== "admin")

@@ -5,7 +5,12 @@
  * inspector's own monthly sales sheet (e.g. "John E 2026 - Automated (Sheet)").
  * Only columns A–D are written, so every formula column downstream is untouched.
  */
-import { execFile } from "node:child_process";
+import {
+  driveListSpreadsheets,
+  spreadsheetTabs,
+  valuesGet,
+  valuesUpdate,
+} from "./google";
 
 const MONTHS = [
   "January",
@@ -22,63 +27,16 @@ const MONTHS = [
   "December",
 ];
 
-function gws(args: string[]): Promise<any> {
-  return new Promise((resolve, reject) => {
-    execFile(
-      "gws",
-      args,
-      { maxBuffer: 20 * 1024 * 1024, timeout: 45_000 },
-      (err, stdout, stderr) => {
-        if (err) {
-          const msg = String(stderr || err.message).trim();
-          reject(new Error(msg.slice(0, 600) || "Google Sheets request failed"));
-          return;
-        }
-        try {
-          resolve(stdout.trim() ? JSON.parse(stdout) : {});
-        } catch {
-          reject(new Error("Unexpected response from Google Sheets"));
-        }
-      }
-    );
-  });
-}
-
 /** Spreadsheets in the user's Drive that look like sales sheets. */
 export async function listCandidateSheets(): Promise<
   { id: string; name: string; modifiedTime: string }[]
 > {
-  const q =
-    "mimeType='application/vnd.google-apps.spreadsheet' and trashed=false";
-  const res = await gws([
-    "drive",
-    "files",
-    "list",
-    "--params",
-    JSON.stringify({
-      q,
-      pageSize: 100,
-      orderBy: "modifiedTime desc",
-      fields: "files(id,name,modifiedTime)",
-    }),
-  ]);
-  return (res?.files ?? []).map((f: any) => ({
-    id: f.id,
-    name: f.name,
-    modifiedTime: f.modifiedTime ?? "",
-  }));
+  return driveListSpreadsheets();
 }
 
 /** Tab names present in a spreadsheet. */
 export async function sheetTabs(spreadsheetId: string): Promise<string[]> {
-  const res = await gws([
-    "sheets",
-    "spreadsheets",
-    "get",
-    "--params",
-    JSON.stringify({ spreadsheetId, fields: "sheets(properties(title))" }),
-  ]);
-  return (res?.sheets ?? []).map((s: any) => s?.properties?.title).filter(Boolean);
+  return spreadsheetTabs(spreadsheetId);
 }
 
 function monthTabFor(dateStr: string, tabs: string[]): string | null {
@@ -130,19 +88,7 @@ export async function exportToSalesSheet(input: ExportInput): Promise<ExportResu
     );
   }
 
-  const read = await gws([
-    "sheets",
-    "spreadsheets",
-    "values",
-    "get",
-    "--params",
-    JSON.stringify({
-      spreadsheetId,
-      range: `${tab}!A1:D400`,
-      majorDimension: "ROWS",
-    }),
-  ]);
-  const rows: string[][] = read?.values ?? [];
+  const rows: string[][] = await valuesGet(spreadsheetId, `${tab}!A1:D400`);
 
   // Header row: first row whose first cell reads like "Customer".
   let headerRow = 0;
@@ -179,16 +125,7 @@ export async function exportToSalesSheet(input: ExportInput): Promise<ExportResu
 
   const values = [input.clientName, input.address, input.city, targetDate];
   const range = `${tab}!A${firstEmpty}:D${firstEmpty}`;
-  await gws([
-    "sheets",
-    "spreadsheets",
-    "values",
-    "update",
-    "--params",
-    JSON.stringify({ spreadsheetId, range, valueInputOption: "USER_ENTERED" }),
-    "--json",
-    JSON.stringify({ values: [values] }),
-  ]);
+  await valuesUpdate(spreadsheetId, range, [values]);
 
   return { tab, row: firstEmpty, range, spreadsheetId, values };
 }
